@@ -1,0 +1,1509 @@
+---
+title: "FOSEDA"
+subtitle: "Studio wall"
+author: "Group 6"
+format:
+  html:
+    toc: true
+    toc-depth: 2
+    code-tools: true
+---
+
+# Spine
+
+> Who arrives in acute coronary crisis, which habits travel with that crisis, and where in Africa is life short?
+
+~~This sentence stays at the top. Every panel must attach to it.~~
+
+# Introduction — the tables we own
+
+This folder is ours for the ten days. Our tables, our shapes.
+
+- **Panel A** (`panel-A.csv`) — acute coronary syndrome patients: age, BMI, cholesterol (TC, LDLC, HDLC) and EF, plus sex and obesity.
+- **Panel B** (`panel-B.csv`) — same patients, Quals: smoking, sex, DM, HBP, Dx, cardiogenic shock.
+- **Panel C** (`panel-C.csv`) — gapminder 2007. Join by country name.
+- **Panel D** — Erin Brockovich in Hinkley: a hand-built plume and family homes.
+- **Panel E** — Found Data: six campus hunches we collected ourselves (AI belief, allowance, MBTI, relationships, tattoos, TV shows).
+
+```{r}
+#| label: FOSEDA
+#| message: false # keeps rendered Quarto less noisy
+#| warning: false
+
+library(tidyverse)
+library(mosaic)
+library(skimr)
+library(ggformula)
+##
+library(broom) # for clean stat outputs
+library(sf) # for Panel-C
+library(rnaturalearth) # for Panel-C
+library(leaflet) # for Panel-D
+library(readxl) # for Hunch 6
+library(janitor) # for Hunch 3 and Hunch 6
+# vcd and supernova must be installed, but we do NOT load them with library().
+# We always write vcd::mosaic() and supernova::supernova(), so vcd's mosaic()
+# never fights with the mosaic package.
+
+A <- read_csv("data/panel-A.csv")
+B <- read_csv("data/panel-B.csv")
+C <- read_csv("data2/panel-C.csv")
+```
+
+~~Found tables train the mark. A campus Free Hunch is a **made** panel of the same pair type.~~
+
+# Panel A — body / measure
+
+*age, BMI, TC, LDLC, HDLC and EF are Quant. sex and obesity are Quals for split.*
+
+### 1. See the table
+
+~~What is a case? Which columns are Quant / Qual? What is missing?~~
+
+```{r}
+#| label: inspect-panel-A-data-1
+
+# glimpse() / inspect() / skim()
+dplyr::glimpse(A)
+```
+
+My Panel-A data has:
+
+- ___ observations and 8 variables. *(fill in the rows from `glimpse()`)* Each row (case) is one patient.
+- `age`: Quantitative, numeric
+- `BMI`: Quantitative, numeric
+- `TC`: Quantitative, numeric (total cholesterol)
+- `LDLC`: Quantitative, numeric ("bad" cholesterol)
+- `HDLC`: Quantitative, numeric ("good" cholesterol)
+- `EF`: Quantitative, numeric (ejection fraction)
+- `sex`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `obesity`: Qualitative, categorical. Encoded <chr>, to be mutated
+
+```{r}
+#| label: inspect-panel-A-data-2
+
+# glimpse() / inspect() / skim()
+skimr::skim(A)
+```
+
+Furthermore, on the Qual variables panel-A data has :
+
+- `sex` has 2 levels: "Female" and "Male"
+- `obesity` has 2 levels: "No" and "Yes"
+
+And on the Quant variables panel-A data has :
+
+- `age` has a mean of ___, sd of ___, median of ___, min of ___, and max of ___ *(fill in from `skim()`)*
+- `BMI` has a mean of ___, sd of ___, median of ___, min of ___, and max of ___
+- `TC`, `LDLC`, `HDLC` and `EF`: *(fill in from `skim()`)*
+
+Missing data? *(fill in from the `n_missing` column of `skim()`. `BMI`, the cholesterol columns and `EF` may have gaps, which is why we use `na.rm = TRUE` below.)*
+
+```{r}
+#| label: mutate-A-factors
+
+A_mod <- A |>
+  mutate(sex = as.factor(sex), obesity = as.factor(obesity))
+glimpse(A_mod)
+```
+
+All ready now.
+
+### 2. Ask
+
+~~One question *this* table can answer. One it cannot. Write both.~~
+
+Looking at the overall Spine statement, I can pose the following Questions:
+
+Possibly can answer:
+
+1. Are people with more `BMI` prone to becoming obese?
+1. Is `obesity` impacted by `age`? (Main Character Question)
+1. Is the `age` and `obesity` pattern different for men and women?
+1. Is `TC` associated with `LDLC`?
+1. Does cholesterol (`TC`) increase with `age`?
+1. How do `HDLC` and `LDLC` vary in the population?
+
+Possibly cannot answer:
+
+1. Does `EF` increase or decrease with `BMI`? (The data doesn't show the relation between `EF` and `BMI` properly)
+1. How much fat can a person with a given `HDLC` eat and keep a stable `EF`? (No diet data)
+1. Does more workout lead to increased `EF`? (No exercise data)
+1. How many people whose `EF` changed with `LDLC` have died? (No follow-up or death data)
+
+### 3. Choose a mark
+
+~~Geom, map mark, or (later) test that matches the pair type. Name it before you code.~~
+
+1. Box plot + Stat Test For Means
+1. Histograms, coloured by `obesity` + Stat Test For Means
+1. Box plot, coloured by `sex`
+1. Scatter Plot + Correlation Test
+1. Scatter Plot, coloured by `sex` + Correlation Test
+1. Histograms
+
+### 4. Predict
+
+~~What do we think we will see? One sentence, before Run.~~
+
+1. I think obese patients will have a much higher `BMI`.
+1. I think obese patients will be younger on average than non-obese patients.
+1. I think the pattern will look similar for men and women.
+1. I think `TC` and `LDLC` will be strongly positively correlated, since `LDLC` is part of `TC`.
+1. I think `TC` will go up a little with `age`.
+1. I think `LDLC` will be spread much wider than `HDLC`.
+
+### 5. Make
+
+~~Human brick first. Optional: one AI prompt, pasted below, only for what section 3 named.~~
+
+These first few charts are what I want to check out. I may/will not have these charts in the final rendered Quarto, but want to comment on findings if needed.
+
+If any chart is surprising, it stays.
+
+```{r}
+#| label: panelA-charts-I-want-to-see-but-not-show-1
+#| eval: false
+#| echo: true # Include the code, but don't compute in render
+
+## Question 1, ggplot version
+A_mod |> ggplot(aes(x = obesity, y = BMI, fill = obesity)) + geom_boxplot(color = "black")
+
+## Question 2, ggplot version
+A_mod |> ggplot(aes(x = age, fill = obesity)) + geom_histogram(binwidth = 5, position = "dodge", color = "black")
+
+## Cannot-answer Question 1
+A_mod |> ggplot(aes(x = BMI, y = EF)) + geom_point() + geom_smooth(method = "lm", se = FALSE)
+
+## Question 6, against age
+A_mod |> ggplot(aes(x = age, y = HDLC)) + geom_point(alpha = 0.3) + geom_smooth()
+A_mod |> ggplot(aes(x = age, y = LDLC)) + geom_point(alpha = 0.3) + geom_smooth()
+```
+
+```{r}
+#| label: panel-A-question-1
+#| message: false
+#| warning: false
+
+## Question 1
+A_mod |> gf_boxplot(BMI ~ obesity, fill = ~ obesity, title = "Are people with more BMI prone to becoming obese?")
+
+A_mod |> group_by(obesity) |> summarise(mean_BMI = mean(BMI, na.rm = TRUE))
+mosaic::t_test(BMI ~ obesity, data = A_mod) |> broom::tidy()
+```
+
+```{r}
+#| label: panel-A-Main-Character-question
+#| message: false
+#| warning: false
+
+## Question 2 (Main Character)
+A_mod |> gf_histogram(~ age, fill = ~ obesity, color = "black", title = "Is obesity impacted by age?")
+
+A_mod |> group_by(obesity) |> summarise(mean_age = mean(age, na.rm = TRUE))
+```
+
+```{r}
+#| label: tbl-panel-A-stat-test
+#| tbl-cap: "Age vs Obesity: Is the difference in mean age significant?"
+
+# Main Character Question
+mosaic::t_test(age ~ obesity, data = A_mod) |> broom::tidy()
+```
+
+```{r}
+#| label: panel-A-question-3
+#| message: false
+#| warning: false
+
+## Question 3
+A_mod |> gf_boxplot(age ~ obesity, color = ~ sex, title = "Is the age and obesity pattern different for men and women?")
+```
+
+```{r}
+#| label: panel-A-question-4
+#| message: false
+#| warning: false
+
+## Question 4
+A_mod |> gf_point(LDLC ~ TC, alpha = 0.3, title = "Is TC associated with LDLC?") |>
+  gf_smooth(method = "lm")
+
+mosaic::cor.test(LDLC ~ TC, data = A_mod) |> broom::tidy()
+```
+
+```{r}
+#| label: panel-A-question-5
+#| message: false
+#| warning: false
+
+## Question 5
+A_mod |> gf_point(TC ~ age, color = ~ sex, alpha = 0.3, title = "Does cholesterol increase with age?") |>
+  gf_smooth(method = "lm", se = FALSE)
+
+mosaic::cor.test(TC ~ age, data = A_mod) |> broom::tidy()
+```
+
+```{r}
+#| label: panel-A-question-6
+#| message: false
+#| warning: false
+
+## Question 6
+A_mod |> gf_histogram(~ HDLC, title = "How does HDLC vary in the population?")
+A_mod |> gf_histogram(~ LDLC, title = "How does LDLC vary in the population?")
+```
+
+### 6. Say
+
+~~Caption + one sentence we will stand behind.~~
+
+1. Obese patients have a clearly higher `BMI` (mean ___ vs ___, p-value ___). No surprise, since `obesity` is decided from `BMI` in the first place. *(fill in from the Question 1 output)*
+1. The mean `age` of obese and non-obese patients differs by ___ years (p-value ___). *(fill in from the t-test table: if p < 0.05 the difference is significant, if not, `age` does not clearly change `obesity`)*
+1. The age and obesity pattern looks ___ for men and women. *(fill in from the Question 3 box plot)*
+1. `TC` and `LDLC` are positively correlated (r = ___, p-value ___). *(fill in from the Question 4 output)*
+1. `TC` ___ with `age` (r = ___, p-value ___). *(fill in from the Question 5 output)*
+1. `HDLC` is ___ and `LDLC` is ___. *(fill in the shape and spread from the Question 6 histograms)*
+
+### 7. Limit
+
+~~What this panel cannot do.~~
+
+- It cannot say *why* people become obese or why cholesterol rises (no diet, exercise or family history data).
+- It only has patients who already arrived in acute coronary crisis, so it cannot speak for healthy people.
+- It is one snapshot, so it cannot show change over TIME.
+- Correlation is not causation: `TC` and `LDLC` moving together does not mean one causes the other.
+
+# Panel B — category / talk
+
+*smoking × sex, DM × HBP, Dx × cardiogenicShock. Do not histogram smoking.*
+
+### 1. See the table
+
+~~What is a case? Which columns are Quant / Qual? What is missing?~~
+
+```{r}
+#| label: inspect-panel-B-data-1
+
+# glimpse() / inspect() / skim()
+dplyr::glimpse(B)
+```
+
+My Panel-B data has:
+
+- ___ observations and ___ variables. *(fill in from `glimpse()`)* Each row (case) is one patient.
+- `sex`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `obesity`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `smoking`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `Dx`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `cardiogenicShock`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `entry`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `DM`, `HBP`: Qualitative, categorical. Encoded <chr>, to be mutated *(check `glimpse()` for any other columns)*
+
+```{r}
+#| label: inspect-panel-B-data-2
+
+# glimpse() / inspect() / skim()
+skimr::skim(B)
+```
+
+Further, on the Qual variables panel-B data has :
+
+- `sex` has 2 levels: "Female" and "Male"
+- `obesity` has 2 levels: "No" and "Yes"
+- `smoking` has 3 levels: ___ *(fill in from `skim()`)*
+- `Dx` has 3 levels: "STEMI", "NSTEMI" and "Unstable Angina"
+- `cardiogenicShock` has 2 levels: "No" and "Yes"
+- `entry` has 2 levels: "Femoral" and "Radial"
+
+And on the Quant variables panel-B data has : None. All variables are Qualitative only.
+
+Missing data? *(fill in from the `n_missing` column of `skim()`)*
+
+```{r}
+#| label: mutate-B-factors
+
+B_mod <- B |>
+  mutate(across(where(is.character), as.factor)) # Whoa!!
+
+glimpse(B_mod)
+```
+
+Now, we're ready.
+
+### 2. Ask
+
+~~One question *this* table can answer. One it cannot. Write both.~~
+
+Looking at the spine statement again, I can pose the following Questions:
+
+Possibly can answer:
+
+1. Does `obesity` differ between males and females, more than we would expect by chance? (Main Character Question)
+1. Does `smoking` status differ across STEMI, NSTEMI, and Unstable Angina patients?
+1. Is `obesity` distributed differently across the different diagnosis (`Dx`) groups?
+1. Is `cardiogenicShock` more common in certain `Dx` groups?
+1. Does the type of `entry`, Radial or Femoral, differ across `Dx` groups?
+
+Possibly cannot answer:
+
+1. Does `smoking` *cause* STEMI? (Patients were not assigned to smoke. This is not an RCT.)
+1. How many cigarettes a day is risky? (No amount of smoking, only a category)
+
+### 3. Choose a mark
+
+~~Geom, map mark, or (later) test that matches the pair type. Name it before you code.~~
+
+1. Mosaic Chart + Chi-Square Test
+1. Bar Chart with fill, dodged
+1. Bar Chart with fill, as proportions
+1. Mosaic Chart
+1. Bar Chart with fill, dodged
+
+### 4. Predict
+
+~~What do we think we will see? One sentence, before Run.~~
+
+1. I think obesity will be about the same for men and women, so the chi-square test will not be significant.
+1. I think smokers will show up most among STEMI patients.
+1. I think obesity will look similar across the `Dx` groups.
+1. I think cardiogenic shock will be most common in STEMI.
+1. I think `entry` will look similar across the `Dx` groups.
+
+### 5. Make
+
+~~Human brick first. Optional: one AI prompt, pasted below, only for what section 3 named.~~
+
+```{r}
+#| label: main-character-question-B
+
+# Question 1 (Main Character)
+B_table <- vcd::structable(obesity ~ sex, data = B_mod)
+B_table
+vcd::mosaic(B_table, shade = TRUE, main = "Does obesity differ between males and females?")
+vcd::mosaic(B_table, type = "expected", main = "What would we expect by chance?")
+```
+
+```{r}
+#| label: tbl-panel-B-stat-test
+#| tbl-cap: "Obesity vs Sex: Chi-Square Test"
+
+# Main Character Question
+mosaic::xchisq.test(obesity ~ sex, data = B_mod)
+```
+
+```{r}
+#| label: panel-B-question-2
+
+# Question 2
+B_mod |> gf_bar(~ Dx, fill = ~ smoking, position = "dodge", title = "Does smoking status differ across STEMI, NSTEMI, and Unstable Angina patients?")
+```
+
+```{r}
+#| label: panel-B-question-3
+
+# Question 3
+B_mod |> gf_bar(~ Dx, fill = ~ obesity, position = "fill", title = "Is obesity distributed differently across the diagnosis groups?")
+```
+
+```{r}
+#| label: panel-B-question-4
+
+# Question 4
+vcd::structable(cardiogenicShock ~ Dx, data = B_mod) |>
+  vcd::mosaic(shade = TRUE, main = "Is cardiogenic shock more common in certain diagnosis groups?")
+```
+
+```{r}
+#| label: panel-B-question-5
+
+# Question 5
+B_mod |> gf_bar(~ Dx, fill = ~ entry, position = "dodge", title = "Does the type of entry, Radial or Femoral, differ across diagnosis groups?")
+```
+
+### 6. Say
+
+~~Caption + one sentence we will stand behind.~~
+
+1. Obesity ___ differ between men and women (X-squared = ___, p-value ___). *(fill in from the chi-square output: if p < 0.05 it does differ, if not, it does not)*
+1. Smokers are ___ among STEMI patients compared to NSTEMI and Unstable Angina. *(fill in from the Question 2 bar chart)*
+1. The share of obese patients looks ___ across the `Dx` groups. *(fill in from the Question 3 bar chart)*
+1. Cardiogenic shock is most common in ___. *(fill in from the coloured tiles in the Question 4 mosaic)*
+1. `entry` looks ___ across the `Dx` groups. *(fill in from the Question 5 bar chart)*
+
+### 7. Limit
+
+~~What this panel cannot do.~~
+
+- It cannot say that smoking or obesity *causes* a diagnosis. Nobody was assigned to smoke, so this is not an RCT.
+- It only has patients who already arrived in acute coronary crisis, so it cannot speak for healthy people.
+- It has categories only, so it cannot say *how much* smoking or weight is risky.
+
+# Panel C — place
+
+*lifeExp / gdpPercap / pop by country and continent. Same join brick as other map panels.*
+
+### 1. See the table
+
+~~What is a case? Which columns are Quant / Qual? What is missing?~~
+
+```{r}
+#| label: inspect-panel-C-data-1
+
+dplyr::glimpse(C)
+```
+
+My Panel-C data has:
+
+- 25 rows and 6 columns. Each row (case) is one country of the Americas in 2007.
+- `country`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `continent`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `year`: Quantitative, numeric. It is 2007 all the way down, so the data is for one year only.
+- `lifeExp`: Quantitative, numeric
+- `pop`: Quantitative, numeric
+- `gdpPercap`: Quantitative, numeric
+
+Let us `join` this data with map geometries from `rnaturalearth`, so that we can make maps of the quant variables.
+
+```{r}
+#| label: get-map-data
+
+world <- rnaturalearth::ne_countries(scale = "medium", returnclass = "sf")
+glimpse(world)
+```
+
+`world` is an `sf` data frame, with a MULTIPOLYGON `geometry` column, which we need. The `name` column has the name of the country, which is what we will use to `join` with our Panel-C data.
+
+Let us select just the `name` and `geometry` columns first, and then join with Panel-C data. In passing, we will also mutate `country` and `continent` into factors.
+
+NOTE: the join fails for two countries, because the names are spelled differently. Panel-C says "United States" and "Dominican Republic", while `world` says "United States of America" and "Dominican Rep.". We fix the names in Panel-C before joining.
+
+```{r}
+#| label: join-data
+
+world_selected <- world |> dplyr::select(name, geometry)
+
+C_mod <- C |>
+  ###
+  mutate(country = case_when(
+    country == "United States" ~ "United States of America",
+    country == "Dominican Republic" ~ "Dominican Rep.",
+    .default = country
+  )) |>
+  ###
+  left_join(world_selected, by = c("country" = "name")) |>
+  ###
+  mutate(
+    country = as_factor(country),
+    continent = as_factor(continent)
+  ) |>
+  ###
+  st_as_sf() # left_join() on a tibble drops the sf class, so put it back
+
+glimpse(C_mod)
+```
+
+```{r}
+#| label: inspect-panel-C-data-2
+
+C_mod |>
+  sf::st_drop_geometry() |> # skim() cannot summarise the map shapes, so drop them here only
+  skimr::skim()
+```
+
+Finally, after joining, on the Qual variables Panel-C data has:
+
+- `country`: Qualitative, categorical. Encoded <fct> with 25 levels, one per country, from "Argentina" to "Venezuela".
+- `continent`: Qualitative, categorical. Encoded <fct> with 1 level: "Americas"
+
+And the Quant variables are:
+
+- `year`: Quantitative, numeric. One value only: 2007
+- `lifeExp`: Quantitative, numeric. Mean: 73.6, sd: 4.44, min: 60.9, median: 72.9, max: 80.7
+- `pop`: Quantitative, numeric. Mean: 3.60e+07, sd: 6.88e+07, min: 1.06e+06, median: 9.32e+06, max: 3.01e+08
+- `gdpPercap`: Quantitative, numeric. Mean: 11003, sd: 9713, min: 1202, median: 8948, max: 42952
+
+There is no missing data. `pop` and `gdpPercap` are extremely right-skewed, which is why we use log scales below.
+
+### 2. Ask
+
+~~One question *this* table can answer. One it cannot. Write both.~~
+
+Possibly can answer:
+
+1. How is `pop` spread across the countries of the Americas?
+1. How does `gdpPercap` vary per country across the Americas? (Main Character Question)
+1. Are `gdpPercap` and `lifeExp` related?
+1. Where on the map are the high `pop`, `lifeExp` and `gdpPercap` countries?
+
+Possibly cannot answer:
+
+1. Why are some countries richer than others? (No data on causes)
+1. Do the quant variables change over time? (Only one `year`)
+
+### 3. Choose a mark
+
+~~Geom, map mark, or (later) test that matches the pair type. Name it before you code.~~
+
+1. Bar chart (`gf_col`) for `pop` per country
+1. Violin + jitter, and Box + jitter, for `gdpPercap`
+1. Scatter plot for `lifeExp` vs `gdpPercap` + Correlation Test
+1. Maps (`gf_sf`)
+
+### 4. Predict
+
+~~What do we think we will see? One sentence, before Run.~~
+
+I think more populous countries have higher gdp per capita and that richer countries will have higher `lifeExp`.
+
+### 5. Make
+
+~~Human brick first. Optional: one AI prompt, pasted below, only for what section 3 named.~~
+
+```{r}
+#| label: question-1-pop-per-country
+#| warning: false
+
+# Question 1
+C_mod |>
+  gf_col(reorder(country, pop) ~ pop, fill = ~ continent,
+         title = "How is population spread across the countries of the Americas?") |>
+  gf_labs(y = "country") |>
+  gf_refine(scale_x_log10())
+```
+
+```{r}
+#| label: main-character-question-C-violin
+
+# Question 2
+ggplot(C_mod, aes(continent, gdpPercap, colour = continent)) +
+  geom_violin() +
+  geom_jitter(width = 0.15) +
+  scale_y_log10() +
+  theme(legend.position = "none") +
+  labs(title = "How does GDP per capita vary per country across the Americas?")
+```
+
+```{r}
+#| label: main-character-question-C-boxplot
+
+# Question 2
+ggplot(C_mod, aes(continent, gdpPercap, colour = continent)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.15) +
+  scale_y_log10() +
+  theme(legend.position = "none") +
+  labs(title = "How does GDP per capita vary per country across the Americas?")
+```
+
+```{r}
+#| label: question-3-lifeExp-vs-gdpPercap
+
+# Question 3
+ggplot(C_mod, aes(gdpPercap, lifeExp, colour = continent)) +
+  geom_point() +
+  scale_x_log10() + # decompress the points squashed on the left of the graph
+  labs(title = "Are GDP per capita and life expectancy related?")
+
+mosaic::cor.test(lifeExp ~ gdpPercap, data = C_mod) |> broom::tidy()
+```
+
+```{r}
+#| label: maps-C
+
+# Question 4
+C_mod |> gf_sf(geometry = ~ geometry, fill = ~ pop, color = ~ continent,
+        title = "Where do the most people live in the Americas?")
+C_mod |> gf_sf(geometry = ~ geometry, fill = ~ lifeExp, color = ~ continent,
+        title = "Where is life expectancy highest in the Americas?")
+C_mod |> gf_sf(geometry = ~ geometry, fill = ~ gdpPercap, color = ~ continent,
+        title = "Where is GDP per capita highest in the Americas?")
+```
+
+### 6. Say
+
+~~Caption + one sentence we will stand behind.~~
+
+1. Population is very uneven: the United States (about 301 million) and Brazil (about 190 million) are far bigger than everyone else, while the middle country has only about 9.3 million people.
+1. Most countries of the Americas sit between about 5,700 and 12,000 dollars of `gdpPercap`. The box plot alone hides the story, but the jitter shows two countries far above the rest, the United States (42,952) and Canada (36,319), and one far below, Haiti (1,202).
+1. Across the 25 countries of the Americas, `lifeExp` and `gdpPercap` are positively correlated (r = 0.59, p-value = 0.002). Haiti is the poorest country and also has the shortest life, at 60.9 years.
+1. On the maps, the richest and longest-living countries are in the north (Canada and the United States). Our prediction was only half right: the biggest country is also the richest, but Brazil, the second biggest, is only in the middle for `gdpPercap`.
+
+### 7. Limit
+
+~~What this panel cannot do.~~
+
+- It doesn't say *why* countries differ.
+- It doesn't show change over TIME, since there is only 2007.
+- It doesn't prove that money causes long life. Correlation is not causation.
+- It only covers the Americas, so it cannot answer the "where in Africa" part of our spine.
+
+# Panel D — Erin Brockovich
+
+*Erin Brockovich in Hinkley, California: a hand-built plume of contaminated water and the homes of the families she met.*
+
+### 1. See the table
+
+~~What is a case? Which columns are Quant / Qual? What is missing?~~
+
+First, a base map pointed at Hinkley, so we can check we are in the right place. `Esri.WorldImagery` is satellite, so the PG&E site, streets and houses show up at zoom 14.
+
+```{r}
+#| label: base-map-hinkley
+
+leaflet() |>
+  addProviderTiles("Esri.WorldImagery") |>
+  setView(lng = -117.2050, lat = 34.9360, zoom = 14)
+```
+
+Tibble #1: the plume. Each row is one corner of the plume POLYGON. It starts at the PG&E tanks and runs about 1 mile southwards towards Hinkley.
+
+```{r}
+#| label: tibble-1-plume
+
+plume <- tibble(
+  lng = c(-117.2135, -117.2095, -117.2040, -117.2030, -117.2090, -117.2160, -117.2165),
+  lat = c( 34.9460,   34.9460,   34.9380,   34.9270,   34.9230,   34.9290,   34.9390)
+)
+plume
+```
+
+Tibble #2: the families. Each row (case) is one family's home, as a POINT.
+
+```{r}
+#| label: tibble-2-families
+
+families <- tibble(
+  family = c("Jensen", "Robinson", "Irving", "Matthews", "Gomez"),
+  address = c("12 Mountain View Rd", "40 Acacia St", "7 Summerset Rd",
+              "88 Community Blvd", "25 Serra Rd"),
+  phone = c("555-0101", "555-0102", "555-0103", "555-0104", "555-0105"),
+  people = c(4, 3, 5, 2, 6),
+  illness = c("Breast cancer", "Tumours", "Nosebleeds", "Headaches", "Rashes"),
+  severity = c("High", "High", "Medium", "Low", "Medium"),
+  water_from = c("Well", "Well", "Well", "Well", "Well"),
+  signed_up = c("Yes", "Yes", "Yes", "No", "Yes"),
+  col = c("red", "red", "orange", "yellow", "orange"),
+  lng = c(-117.2100, -117.2075, -117.2120, -117.2060, -117.2135),
+  lat = c( 34.9400,   34.9350,   34.9310,   34.9260,   34.9290)
+)
+families
+```
+
+My data has:
+
+- `plume`: 7 rows and 2 columns. Each row is one corner of the plume.
+- `families`: 5 rows and 11 columns. Each row is one family's home.
+- `family`, `address`, `phone`: Qualitative, categorical. Encoded <chr>. One per family.
+- `illness`: Qualitative, categorical. Encoded <chr>
+- `severity`: Qualitative, ordinal ("Low" < "Medium" < "High"). Encoded <chr>
+- `water_from`: Qualitative, categorical. Encoded <chr>. Every family drinks well water.
+- `signed_up`: Qualitative, categorical ("Yes" / "No"). Did the family join the case against PG&E?
+- `col`: the colour for each `severity`, used to colour the markers.
+- `people`: Quantitative, numeric. How many people live in the home.
+- `lng`, `lat`: Quantitative, numeric. Where the point is.
+
+There is no missing data. Everything is made up by hand: the families, addresses, phone numbers and illnesses are hypothetical, and the coordinates are approximate.
+
+### 2. Ask
+
+~~One question *this* table can answer. One it cannot. Write both.~~
+
+Possibly can answer:
+
+1. Which families live on top of the plume, and how sick are they? (Main Character Question)
+
+Possibly cannot answer:
+
+1. Did the chromium in the water *cause* the illnesses? (No water tests or medical records)
+1. How did the plume grow over the years? (One snapshot only)
+
+### 3. Choose a mark
+
+~~Geom, map mark, or (later) test that matches the pair type. Name it before you code.~~
+
+1. Interactive map (`leaflet`): plume as `addPolygons()`, homes as `addCircleMarkers()` coloured by `severity`, with popups and a legend
+
+### 4. Predict
+
+~~What do we think we will see? One sentence, before Run.~~
+
+I think the families closest to the PG&E tanks, in the middle of the plume, will have the most severe illnesses.
+
+### 5. Make
+
+~~Human brick first. Optional: one AI prompt, pasted below, only for what section 3 named.~~
+
+**Which families live on top of the plume, and how sick are they?**
+
+```{r}
+#| label: main-character-question-D
+
+# Question 1
+popup <- paste(
+  "<strong>", families$family, "</strong><br>",
+  families$address, "<br>",
+  "Phone: ", families$phone, "<br>",
+  "People at home: ", families$people, "<br>",
+  "Illness: ", families$illness, "<br>",
+  "Severity: ", families$severity, "<br>",
+  "Water from: ", families$water_from, "<br>",
+  "Signed up: ", families$signed_up, "<br>"
+)
+
+leaflet(data = families) |>
+  addProviderTiles("Esri.WorldImagery") |>
+  setView(lng = -117.2050, lat = 34.9360, zoom = 14) |>
+  # Tibble #1: the plume
+  addPolygons(
+    lng = plume$lng, lat = plume$lat,
+    color = "purple", weight = 2,
+    fill = TRUE, fillColor = "purple",
+    popup = "Contaminated groundwater plume"
+  ) |>
+  # The PG&E tanks
+  addMarkers(
+    lng = -117.2115, lat = 34.9455,
+    label = "PG&E compressor station (tanks)",
+    labelOptions = labelOptions(noHide = TRUE, textOnly = FALSE, textsize = 14)
+  ) |>
+  # Tibble #2: the families, coloured by severity
+  addCircleMarkers(
+    lng = ~lng, lat = ~lat,
+    radius = 8, # Pixels
+    color = families$col,
+    stroke = FALSE,
+    fillOpacity = 1,
+    label = families$family,
+    popup = popup
+  ) |>
+  addLegend(
+    title = "Illness severity",
+    colors = c("red", "orange", "yellow"),
+    labels = c("High", "Medium", "Low")
+  )
+```
+
+### 6. Say
+
+~~Caption + one sentence we will stand behind.~~
+
+Every family on the map lives on top of the plume and drinks well water. The two families closest to the PG&E tanks, the Jensens and the Robinsons, have the most severe illnesses, while the Matthews family, at the far southern tip of the plume, has the mildest.
+
+### 7. Limit
+
+~~What this panel cannot do.~~
+
+- It isn't proof that the chromium caused the illnesses.
+- It doesn't speak for the whole town (only 5 made-up families).
+- It doesn't show how the plume spread over TIME.
+
+---
+
+# Panel E — Found Data
+
+**Authors: Shivgun, Ishita, Rachana**
+
+```{r}
+#| label: read-panel-E-data
+#| message: false
+
+E <- read_csv("dataE/panel-E.csv")
+h2 <- read_csv("dataE/hunch-2.csv")
+h3 <- read_csv("dataE/hunch-3.csv") |>
+  janitor::clean_names() # makes every column name lower_case_with_underscores
+h4 <- read_csv("dataE/hunch-4.csv")
+h5 <- read_csv("dataE/hunch-5.csv")
+# Hunch 6 is read from the Excel file, inside its own section below
+```
+
+## Hunch 1: AI Belief Among Art and Design Students
+
+*We collected data from across the Srishti Manipal campus. Our sample size for this was n = 60, which consisted of 30 art/BFA students and 30 design/BDes students, which included an equal number of boys and girls.*
+
+### 1. See the table
+
+~~What is a case? Which columns are Quant / Qual? What is missing?~~
+
+```{r}
+#| label: inspect-E-data-1
+
+dplyr::glimpse(E)
+```
+
+My E data has:
+
+- 60 observations and 4 variables. Each row (case) is one student.
+- `count`: Quantitative, numeric. Just the student's number, 1 to 60, so we do not analyse it.
+- `program`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `gender`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `AI_belief`: Qualitative, categorical. Encoded <chr>, to be mutated
+
+```{r}
+#| label: inspect-E-data-2
+
+skimr::skim(E)
+```
+
+Furthermore, on the Qual variables E data has :
+
+- `gender` has 2 levels: "boy" (30) and "girl" (30)
+- `program` has 2 levels: "art" (30) and "design" (30)
+- `AI_belief` also has 2 levels: "no" (32) and "yes" (28)
+
+There is NO missing data. We are good to mutate.
+
+```{r}
+#| label: mutate-E-factors
+
+AI <- E |>
+  mutate(
+    gender = as.factor(gender),
+    program = as.factor(program),
+    AI_belief = as.factor(AI_belief)
+  )
+
+glimpse(AI)
+```
+
+All ready now.
+
+### 2. Ask
+
+~~One question *this* table can answer. One it cannot. Write both.~~
+
+Possibly can answer:
+
+1. Do design students have greater belief in AI compared to art students? (Main Character Question)
+1. Does it differ between boys and girls?
+
+Possibly cannot answer:
+
+1. *Why* do students believe in AI or not? (We only asked yes / no)
+
+### 3. Choose a mark
+
+~~Geom, map mark, or (later) test that matches the pair type. Name it before you code.~~
+
+1. Mosaic Chart + Chi-Square Test
+
+### 4. Predict
+
+~~What do we think we will see? One sentence, before Run.~~
+
+We think Design students are more likely to have a greater belief in AI compared to art students, and boys are more likely to have a greater belief than girls.
+
+### 5. Make
+
+~~Human brick first. Optional: one AI prompt, pasted below, only for what section 3 named.~~
+
+```{r}
+#| label: main-character-question-E-AI
+
+# Question 1 and 2
+vcd::structable(AI_belief ~ program + gender, data = AI) |>
+  vcd::mosaic(shade = TRUE, main = "Do design students believe in AI more than art students? Boys more than girls?")
+```
+
+```{r}
+#| label: tbl-E-program-test
+#| tbl-cap: "AI Belief vs Program: Chi-Square Test"
+
+# Question 1
+mosaic::xchisq.test(AI_belief ~ program, data = AI)
+```
+
+```{r}
+#| label: tbl-E-gender-test
+#| tbl-cap: "AI Belief vs Gender: Chi-Square Test"
+
+# Question 2
+mosaic::xchisq.test(AI_belief ~ gender, data = AI)
+```
+
+### 6. Say
+
+~~Caption + one sentence we will stand behind.~~
+
+*Gender, not program, drives AI belief.*
+
+1. Design students said yes a little more often than art students (16 of 30 vs 12 of 30), but the difference is not significant (X-squared = 0.60, p-value = 0.44).
+1. Boys believe significantly more than girls (19 of 30 boys vs 9 of 30 girls said yes, X-squared = 5.42, p-value = 0.02), regardless of whether they study art or design.
+
+### 7. Limit
+
+~~What this panel cannot do.~~
+
+"Belief" means something different to each student. One person might say yes because AI exists and they use it daily; another might say no because they're thinking about ethics or environmental cost.
+
+---
+
+## Hunch 2: Allowance: Guys have more pocket money than Gals.
+
+### 1. See the table
+
+~~What is a case? Which columns are Quant / Qual? What is missing?~~
+
+```{r}
+#| label: inspect-h2-data-1
+
+dplyr::glimpse(h2)
+```
+
+My h2 data has:
+
+- 60 observations and 2 variables. Each row (case) is one student.
+- `gender`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `allowance`: Quantitative, numeric
+
+```{r}
+#| label: inspect-h2-data-2
+
+skimr::skim(h2)
+```
+
+Furthermore, on the Qual variables h2 data has :
+
+- `gender` has 2 levels
+
+And on the Quant variables h2 data has :
+
+- `allowance` has a mean of 6.225, sd of 5.25, median of 5, min of 1, and max of 40
+
+There is NO missing data. We are good to mutate.
+
+```{r}
+#| label: mutate-h2-factors
+
+allowance <- h2 |>
+  mutate(gender = as.factor(gender))
+
+glimpse(allowance)
+```
+
+All ready now.
+
+### 2. Ask
+
+~~One question *this* table can answer. One it cannot. Write both.~~
+
+Possibly can answer:
+
+1. Do guys have more pocket money allowance than girls? (Main Character Question)
+
+Possibly cannot answer:
+
+1. *Why* does one student get more pocket money than another? (No data on family income or city)
+
+### 3. Choose a mark
+
+~~Geom, map mark, or (later) test that matches the pair type. Name it before you code.~~
+
+1. Density plot, Box Plot + Stat Test For Means
+
+### 4. Predict
+
+~~What do we think we will see? One sentence, before Run.~~
+
+Guys are more likely to have greater pocket money allowance than girls.
+
+### 5. Make
+
+~~Human brick first. Optional: one AI prompt, pasted below, only for what section 3 named.~~
+
+```{r}
+#| label: main-character-question-E-allowance
+
+# Question 1
+allowance |> gf_density(~ allowance, fill = ~ gender, alpha = 0.5, title = "Do guys have more pocket money allowance than girls?")
+
+allowance |> gf_boxplot(allowance ~ gender, fill = ~ gender, title = "Do guys have more pocket money allowance than girls?")
+```
+
+```{r}
+#| label: tbl-h2-test
+#| tbl-cap: "Allowance vs Gender: t-Test"
+
+# Question 1
+mosaic::t_test(allowance ~ gender, data = allowance)
+```
+
+### 6. Say
+
+~~Caption + one sentence we will stand behind.~~
+
+Contrary to our prediction, girls in our sample report a slightly higher pocket money allowance than boys, but the difference is not statistically significant (t = ___, p-value = ___). *(fill in from the t-test output)*
+
+### 7. Limit
+
+~~What this panel cannot do.~~
+
+One girl reported an unusually high allowance of around 40k, which likely pulls the female mean up.
+
+---
+
+## Hunch 3: MBTI: I am an INFP.
+
+### 1. See the table
+
+~~What is a case? Which columns are Quant / Qual? What is missing?~~
+
+```{r}
+#| label: inspect-h3-data-1
+
+dplyr::glimpse(h3)
+```
+
+My h3 data has:
+
+- 60 observations and 3 variables. Each row (case) is one student.
+- `department`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `mbti_type`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `social_orientation`: Qualitative, categorical. Encoded <chr>, to be mutated
+
+(We read the file with `janitor::clean_names()`, so whatever the column names were in the csv, they are now `department`, `mbti_type` and `social_orientation`.)
+
+```{r}
+#| label: inspect-h3-data-2
+
+skimr::skim(h3)
+```
+
+Furthermore, on the Qual variables h3 data has :
+
+- `department` has 2 levels: MIT and SMI
+- `mbti_type` has 14 levels
+- `social_orientation` has 2 levels
+
+There is NO missing data. We are good to mutate.
+
+```{r}
+#| label: mutate-h3-factors
+
+mbti <- h3 |>
+  mutate(across(where(is.character), as.factor))
+
+glimpse(mbti)
+```
+
+All ready now.
+
+### 2. Ask
+
+~~One question *this* table can answer. One it cannot. Write both.~~
+
+Possibly can answer:
+
+1. Does personality type differ between MIT and SMI students? (Main Character Question)
+1. Are SMI students more introverted than MIT students?
+
+Possibly cannot answer:
+
+1. Does studying at SMI *make* a student introverted? (We only see one moment, not before and after)
+
+### 3. Choose a mark
+
+~~Geom, map mark, or (later) test that matches the pair type. Name it before you code.~~
+
+1. Bar graph
+1. Bar graph as proportions + Chi-Square Test
+
+### 4. Predict
+
+~~What do we think we will see? One sentence, before Run.~~
+
+SMI students are more likely to be introverted than MIT students.
+
+### 5. Make
+
+~~Human brick first. Optional: one AI prompt, pasted below, only for what section 3 named.~~
+
+```{r}
+#| label: main-character-question-E-mbti
+
+# Question 1
+mbti |> gf_bar(~ mbti_type, fill = ~ department, position = "dodge", title = "Does personality type differ between MIT and SMI students?") |>
+  gf_refine(coord_flip()) # 14 types, so flip the bars to keep the labels readable
+```
+
+```{r}
+#| label: h3-question-2
+
+# Question 2
+mbti |> gf_bar(~ department, fill = ~ social_orientation, position = "fill", title = "Are SMI students more introverted than MIT students?")
+
+mosaic::xchisq.test(social_orientation ~ department, data = mbti)
+```
+
+### 6. Say
+
+~~Caption + one sentence we will stand behind.~~
+
+1. The most common MBTI types are ___ for SMI and ___ for MIT. *(fill in from the Question 1 bar graph)*
+1. SMI students are ___ introverted than MIT students (X-squared = ___, p-value ___). *(fill in from the Question 2 chi-square output: if p < 0.05 the difference is significant, if not, it is not)*
+
+### 7. Limit
+
+~~What this panel cannot do.~~
+
+- MBTI is self-reported, and the same person can get a different type on another day.
+- With 14 types and only 60 students, most types have just a few people, so we cannot compare single types fairly.
+
+---
+
+## Hunch 4: Are SMI Students More Likely to Be in a Relationship?
+
+### 1. See the table
+
+~~What is a case? Which columns are Quant / Qual? What is missing?~~
+
+```{r}
+#| label: inspect-h4-data-1
+
+dplyr::glimpse(h4)
+```
+
+My h4 data has:
+
+- 60 observations. Each row (case) is one student.
+- `department`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `relationship_status`: Qualitative, categorical. Encoded <chr>, to be mutated
+
+```{r}
+#| label: inspect-h4-data-2
+
+skimr::skim(h4)
+```
+
+Furthermore, on the Qual variables h4 data has :
+
+- `department` has 2 levels: SMI and MIT
+- `relationship_status` has 2 levels: Yes and No
+
+There is NO missing data. We are good to mutate.
+
+```{r}
+#| label: mutate-h4-factors
+
+bfgf <- h4 |>
+  mutate(across(where(is.character), as.factor))
+
+glimpse(bfgf)
+```
+
+All ready now.
+
+### 2. Ask
+
+~~One question *this* table can answer. One it cannot. Write both.~~
+
+Possibly can answer:
+
+1. Are SMI (art and design) students more likely to be in a relationship than MIT (engineering) students? (Main Character Question)
+
+Possibly cannot answer:
+
+1. *Why* are some students in a relationship and others not? (We only asked yes / no)
+
+### 3. Choose a mark
+
+~~Geom, map mark, or (later) test that matches the pair type. Name it before you code.~~
+
+1. Bar chart as proportions, Mosaic Chart + Chi-Square Test
+
+### 4. Predict
+
+~~What do we think we will see? One sentence, before Run.~~
+
+SMI students are more likely to be in a relationship (or a situationship) than MIT students.
+
+### 5. Make
+
+~~Human brick first. Optional: one AI prompt, pasted below, only for what section 3 named.~~
+
+```{r}
+#| label: main-character-question-E-relationship
+
+# Question 1
+bfgf |> gf_bar(~ department, fill = ~ relationship_status, position = "fill") |>
+  gf_labs(title = "Are SMI students more likely to be in a relationship than MIT students?",
+          y = "Proportion of students")
+
+vcd::structable(relationship_status ~ department, data = bfgf) |>
+  vcd::mosaic(shade = TRUE, main = "Relationship status by department")
+```
+
+```{r}
+#| label: tbl-h4-test
+#| tbl-cap: "Relationship Status vs Department: Chi-Square Test"
+
+# Question 1
+mosaic::xchisq.test(relationship_status ~ department, data = bfgf)
+```
+
+### 6. Say
+
+~~Caption + one sentence we will stand behind.~~
+
+*The romantic art student is a myth, at least on our campus.*
+
+12 SMI students and 13 MIT students said yes, almost identical. The test confirms there is no real difference (p = 1).
+
+### 7. Limit
+
+~~What this panel cannot do.~~
+
+A one-person difference between 12 and 13 means nothing statistically. "Relationship" was also left undefined, so some students may have counted situationships and others may not.
+
+---
+
+## Hunch 5: Do Tattoos Make People Look More Attractive?
+
+### 1. See the table
+
+~~What is a case? Which columns are Quant / Qual? What is missing?~~
+
+```{r}
+#| label: inspect-h5-data-1
+
+dplyr::glimpse(h5)
+```
+
+My h5 data has:
+
+- 60 observations and 4 variables. Each row (case) is one student.
+- `Respondents`: Quantitative, numeric. Just the student's number, so we do not analyse it.
+- `Gender`: Qualitative, categorical. Encoded <chr>, to be mutated
+- `` `Has_tattoos?` ``: Qualitative, categorical. Encoded <chr>, to be mutated
+- `Opinion`: Qualitative, categorical. Encoded <chr>, to be mutated. Does this person find tattoos attractive?
+
+```{r}
+#| label: inspect-h5-data-2
+
+skimr::skim(h5)
+```
+
+Furthermore, on the Qual variables h5 data has :
+
+- `Gender` has 2 levels: M and F
+- `Has_tattoos?` has 2 levels: yes and no
+- `Opinion` has 2 levels: yes and no
+
+There is NO missing data. The `?` in `Has_tattoos?` makes the name awkward to type, so we rename it to `Has_tattoos` while we mutate.
+
+```{r}
+#| label: mutate-h5-factors
+
+tto <- h5 |>
+  mutate(across(where(is.character), as.factor))
+
+glimpse(tto)
+```
+
+All ready now.
+
+### 2. Ask
+
+~~One question *this* table can answer. One it cannot. Write both.~~
+
+Possibly can answer:
+
+1. Do people with tattoos find tattoos more attractive? (Main Character Question)
+1. Does this differ by gender?
+
+Possibly cannot answer:
+
+1. *Which kind* of tattoo do people find attractive? (We only asked yes / no)
+
+### 3. Choose a mark
+
+~~Geom, map mark, or (later) test that matches the pair type. Name it before you code.~~
+
+1. Bar chart as proportions, Mosaic Chart + Chi-Square Test
+
+### 4. Predict
+
+~~What do we think we will see? One sentence, before Run.~~
+
+People with tattoos will find tattoos more attractive, and girls more than boys.
+
+### 5. Make
+
+~~Human brick first. Optional: one AI prompt, pasted below, only for what section 3 named.~~
+
+```{r}
+#| label: main-character-question-E-tattoos
+
+# Question 1 and 2
+tto |> gf_bar(~ Has_tattoos, fill = ~ Opinion, position = "fill") |>
+  gf_facet_wrap(~ Gender) |>
+  gf_labs(title = "Finds tattoos attractive, by tattoo status and gender",
+          x = "Has a tattoo", y = "Proportion of students")
+
+vcd::structable(Opinion ~ Has_tattoos + Gender, data = tto) |>
+  vcd::mosaic(shade = TRUE, main = "Do people with tattoos find tattoos more attractive?")
+```
+
+```{r}
+#| label: tbl-h5-test
+#| tbl-cap: "Opinion vs Tattoo Status and Gender: Chi-Square Tests"
+
+# Question 1
+mosaic::xchisq.test(Opinion ~ Has_tattoos, data = tto)
+
+# Question 2
+mosaic::xchisq.test(Opinion ~ Gender, data = tto)
+```
+
+### 6. Say
+
+~~Caption + one sentence we will stand behind.~~
+
+*Having a tattoo doesn't change what you think of them.*
+
+Opinions on tattoo attractiveness are almost exactly the same across genders and between people with and without tattoos (p = 1 for both).
+
+### 7. Limit
+
+~~What this panel cannot do.~~
+
+"Attractive" is a single yes/no, which hides nuance: someone may like small tattoos but not face tattoos. The sample is also just 60 students from one campus, so it can't stand in for young people in general.
+
+---
+
+## Hunch 6: TV Shows: Modern Family is the favourite.
+
+### 1. See the table
+
+~~What is a case? Which columns are Quant / Qual? What is missing?~~
+
+```{r}
+#| label: read-h6-data
+#| warning: false
+
+h6 <- readxl::read_excel("dataE/FOSEDA Panel E data.xlsx",
+                         col_types = c("numeric", "date", "date", "date")) |>
+  janitor::clean_names()
+
+glimpse(h6) # Check what is happening
+```
+
+My h6 data has:
+
+- 69 observations and 4 variables. Each row (case) is one student.
+- `students`: Quantitative, numeric. Just the student's number.
+- `friends`, `house`, `modern_family`: each student's score for that show. Excel stored the scores as dates <dttm>, so the score is hiding in the *day* of the date. We pull it out with `lubridate::day()`.
+
+Then we `pivot_longer()` the three show columns into two: `show` (Qual) and `scores` (Quant), so that each row is one student's score for one show.
+
+```{r}
+#| label: mutate-h6-long
+
+h6_mod <- h6 |>
+  mutate(
+    friends = lubridate::day(friends) |> as.numeric(),
+    house = lubridate::day(house) |> as.numeric(),
+    modern_family = lubridate::day(modern_family) |> as.numeric()
+  ) |>
+  tidyr::pivot_longer(c(-students), names_to = "show", values_to = "scores") |>
+  mutate(show = as.factor(show))
+
+glimpse(h6_mod)
+```
+
+```{r}
+#| label: inspect-h6-data-2
+
+skimr::skim(h6_mod)
+```
+
+Furthermore, after the pivot h6_mod has :
+
+- `show`: Qualitative, 3 levels: "friends", "house" and "modern_family"
+- `scores`: Quantitative, numeric. Mean ___, sd ___, min ___, max ___ *(fill in from `skim()`)*
+
+Missing data: YES. Many students had not watched or rated every show, especially House, so `scores` has ___ missing values. *(fill in from the `n_missing` column of `skim()`)* We drop them before the ANOVA.
+
+```{r}
+#| label: drop-h6-missing
+
+tvshows_clean <- h6_mod |> filter(!is.na(scores))
+```
+
+All ready now.
+
+### 2. Ask
+
+~~One question *this* table can answer. One it cannot. Write both.~~
+
+Possibly can answer:
+
+1. Which show do students rate highest: Friends, House or Modern Family? (Main Character Question)
+1. Which pairs of shows are rated differently?
+
+Possibly cannot answer:
+
+1. *Why* do students like one show more than another? (We only have a score)
+
+### 3. Choose a mark
+
+~~Geom, map mark, or (later) test that matches the pair type. Name it before you code.~~
+
+1. Density plot, Box Plot + ANOVA
+1. Pairwise comparison plot
+
+### 4. Predict
+
+~~What do we think we will see? One sentence, before Run.~~
+
+Modern Family will be rated the highest of the three shows.
+
+### 5. Make
+
+~~Human brick first. Optional: one AI prompt, pasted below, only for what section 3 named.~~
+
+```{r}
+#| label: main-character-question-E-tvshows
+
+# Question 1
+tvshows_clean |> gf_density(~ scores, fill = ~ show, alpha = 0.5, title = "Which show do students rate highest?")
+
+tvshows_clean |> gf_boxplot(scores ~ show, fill = ~ show, title = "Which show do students rate highest?")
+```
+
+```{r}
+#| label: tbl-h6-anova
+#| tbl-cap: "Scores vs Show: ANOVA"
+
+# Question 1
+aov(scores ~ show, data = tvshows_clean) |> supernova::supernova()
+```
+
+```{r}
+#| label: h6-question-2
+
+# Question 2
+aov(scores ~ show, data = tvshows_clean) |> supernova::pairwise(plot = TRUE)
+```
+
+### 6. Say
+
+~~Caption + one sentence we will stand behind.~~
+
+Modern Family was rated the highest overall, as we predicted, with ratings clustering around 8-9, while House had the most spread with people either loving it or not. The ANOVA confirms these differences are real and not just chance (F = 8.44, p = 0.0004).
+
+The pairwise comparison further revealed that Modern Family was rated significantly higher than both Friends and House. However, there was no statistically significant difference between Friends and House.
+
+This suggests that Modern Family was the clear favourite among the students who rated these shows, supporting our hunch.
+
+### 7. Limit
+
+~~What this panel cannot do.~~
+
+In this dataset, there were a lot of missing values (NA), since not many people had watched/rated House. In an ideal study, all the people within the sample should have watched all the shows, Friends, House and Modern Family.
+
+# Conclusion
+
+- **The question we will defend in ninety seconds:** Who arrives in acute coronary crisis, which habits travel with that crisis, and where is life short? Panels A and B answer the first two with the patients' bodies and habits, and Panel C shows that in the Americas, richer countries live longer (r = 0.59).
+- **What we will not claim:** that smoking, obesity or cholesterol *cause* a crisis, that money *causes* long life, or that chromium *caused* the illnesses in Hinkley. Nothing here was an experiment.
+- **Limits:** one snapshot in time, patients who already arrived in crisis, the Americas instead of Africa in Panel C, made-up families in Panel D, and small, self-reported campus samples (n = 60 to 69) in Panel E.
